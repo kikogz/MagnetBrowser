@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>简易浏览器 · 磁力识别</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    // 早期错误捕获：把任何报错显示到屏幕顶部红色诊断条，避免“静默死界面”
+    window.__diag = function (msg) {
+      var d = document.getElementById('diag');
+      if (!d) {
+        d = document.createElement('div');
+        d.id = 'diag';
+        (document.body || document.documentElement).appendChild(d);
+      }
+      d.textContent = '诊断：' + msg;
+      d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:8px 12px;font:12px/1.5 monospace;white-space:pre-wrap;';
+    };
+    window.addEventListener('error', function (e) {
+      window.__diag((e.error && e.error.stack) || e.message || 'unknown error');
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      window.__diag('Promise 错误：' + ((e.reason && e.reason.stack) || e.reason));
+    });
+  </script>
+</head>
+<body>
+  <!-- 顶栏（自定义标题栏，可拖拽）：主页 / 后退 / 刷新 / 地址栏(输入+下拉·地址本) / 地址本输入 / 设置 / 窗口控制 -->
+  <div id="toolbar">
+    <button id="home" class="btn" title="主页">🏠</button>
+    <button id="back" class="btn" title="后退">←</button>
+    <button id="fwd" class="btn" title="刷新"><span class="ico">⟳</span></button>
+
+    <div id="addr">
+      <input id="url" type="text" placeholder="输入网址后回车，例如 fanbus.cyou" spellcheck="false" />
+      <button id="addr-drop" class="btn drop" title="地址本">▾</button>
+      <div id="addr-menu" class="menu hidden">
+        <div class="menu-title">地址本</div>
+        <div class="menu-section" id="addr-list"></div>
+        <div class="menu-empty hidden" id="addr-empty">地址本为空，点击「📖 地址本输入」添加</div>
+      </div>
+    </div>
+
+    <button id="addrbook" class="btn" title="地址本输入（添加 / 删除网址）">📖</button>
+    <button id="settings" class="btn" title="设置">⚙</button>
+
+    <div id="win-ctl">
+      <button id="win-min" class="btn win-btn" title="最小化">—</button>
+      <button id="win-max" class="btn win-btn" title="最大化">▢</button>
+      <button id="win-close" class="btn win-btn" title="关闭">✕</button>
+    </div>
+  </div>
+
+  <!-- 内嵌浏览器由主进程 BrowserView 承载（OS 层视图，主进程 setBounds 精确铺满工具栏以下区域），无需 HTML 容器 -->
+
+  <!-- 轻量提示：加载失败等反馈 -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- 设置弹窗（Fluent 2 ContentDialog 风格，参照 NPMpanel2） -->
+  <div id="settings-modal" class="scrim hidden">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="dialog-head">
+        <div>
+          <div class="dialog-title" id="settings-title">设置</div>
+          <div class="dialog-sub">常规选项与磁力预览相关维护</div>
+        </div>
+        <button id="settings-close" class="btn btn-icon" title="关闭">✕</button>
+      </div>
+
+      <div class="dialog-body">
+        <!-- 常规 -->
+        <div class="card">
+          <div class="card-title">常规</div>
+          <div class="card-desc">主页与启动页相互独立。</div>
+          <div class="field">
+            <label class="field-label" for="set-home">主页地址（点 🏠 打开）</label>
+            <input id="set-home" class="input" type="text" placeholder="https://www.javbus.com/" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="set-startup">启动页（打开应用默认加载）</label>
+            <input id="set-startup" class="input" type="text" placeholder="https://www.fanbus.cyou/" />
+          </div>
+        </div>
+
+        <!-- 自动抓取 -->
+        <div class="card">
+          <div class="card-title">自动抓取</div>
+          <div class="card-desc">自动获取防屏蔽地址，开启后自动采集当前页可用域名。</div>
+          <div class="switch-row">
+            <div>
+              <div class="switch-text-title">自动获取防屏蔽地址</div>
+              <div class="switch-text-desc">开启后自动采集当前页可用域名</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="set-auto" /><span class="slider"></span></label>
+          </div>
+        </div>
+
+        <!-- Tracker 维护 -->
+        <div class="card">
+          <div class="card-title">Tracker 维护</div>
+          <div class="card-desc">加速寻找做种者，每行一条。</div>
+          <textarea id="set-trackers" class="input input-mono textarea" rows="9" spellcheck="false" placeholder="udp://tracker.example.com:1337/announce"></textarea>
+          <div class="meta-row">
+            <span id="tracker-count" class="meta-count">共 0 条</span>
+            <button id="tracker-reset" class="btn btn-sm link">恢复默认 31 条</button>
+          </div>
+          <button id="tracker-save" class="btn btn-primary">保存 Tracker</button>
+          <div class="field-hint">保存后立即生效，下次预览即使用新列表。支持 <code>udp://</code> 与 <code>http(s)://</code> 两类；无效行会被忽略并提示。</div>
+        </div>
+
+        <!-- 广告拦截 -->
+        <div class="card">
+          <div class="card-title">广告拦截</div>
+          <div class="card-desc">每行一条：CSS 选择器 或 纯关键字。</div>
+          <textarea id="set-rules" class="input input-mono textarea" rows="9" spellcheck="false" placeholder=".ad-banner  或  广告"></textarea>
+          <div class="meta-row">
+            <span id="rules-count" class="meta-count">共 0 条</span>
+            <button id="rules-reset" class="btn btn-sm link">恢复默认 10 条</button>
+          </div>
+          <button id="rules-save" class="btn btn-primary">保存规则</button>
+          <div class="field-hint">保存后立即作用于当前打开的网页（无需刷新）。含 <code>.</code> <code>#</code> <code>[</code> 等视为 CSS 选择器；纯文字（如「广告」）则隐藏自身文字/属性包含它的元素。</div>
+        </div>
+
+        <!-- 版本信息（置底） -->
+        <div class="card">
+          <div class="card-title">版本信息</div>
+          <div class="field-hint">当前版本：<span id="set-ver">1.0.0</span></div>
+        </div>
+      </div>
+
+      <div class="dialog-foot">
+        <button id="settings-cancel" class="btn">取消</button>
+        <button id="settings-save" class="btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 脚本必须放在所有 DOM 之后：否则 settings-modal/toast 尚未解析，getElementById 取到 null → 按键绑定整段失败 -->
+  <script src="renderer.js"></script>
+</body>
+</html>

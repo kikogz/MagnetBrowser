@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>地址本</title>
+  <style>
+    html, body { margin: 0; background: transparent; font-family: var(--font); }
+
+    /* ============ Fluent 2 设计令牌（与设置弹窗 / 地址本面板对齐） ============ */
+    :root {
+      --bg-layer: #F3F3F3;
+      --bg-card: #FFFFFF;
+      --bg-card-secondary: #FAFAFA;
+      --bg-fill-subtle: rgba(0, 0, 0, 0.037);
+      --bg-fill-hover: rgba(0, 0, 0, 0.0537);
+      --bg-fill-pressed: rgba(0, 0, 0, 0.0241);
+      --stroke-card: #E5E5E5;
+      --stroke-control: rgba(0, 0, 0, 0.0578);
+      --stroke-control-strong: rgba(0, 0, 0, 0.4453);
+      --stroke-divider: rgba(0, 0, 0, 0.0805);
+      --text-primary: #1B1B1F;
+      --text-secondary: #616161;
+      --text-tertiary: #9E9E9E;
+      --text-on-accent: #FFFFFF;
+      --accent: #0078D4;
+      --accent-hover: #1A86D9;
+      --accent-pressed: #0067BE;
+      --accent-subtle: rgba(0, 120, 212, 0.1);
+      --radius-control: 4px;
+      --radius-card: 8px;
+      --font: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI",
+              -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+
+    #menu {
+      background: var(--bg-card);
+      border: 1px solid var(--stroke-card);
+      border-radius: var(--radius-card);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
+      padding: 6px;
+      max-height: 340px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .menu-title { font-size: 11px; color: var(--text-tertiary); padding: 6px 8px 2px; }
+    .menu-item {
+      padding: 7px 10px;
+      border-radius: var(--radius-control);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-primary);
+    }
+    .menu-item:hover { background: var(--accent-subtle); color: var(--accent); }
+    .menu-empty { padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+  </style>
+</head>
+<body>
+    <div id="menu">
+      <div class="menu-title">地址本（仅显示已激活）</div>
+      <div id="addr-list"></div>
+      <div id="addr-empty" class="menu-empty">没有已激活的地址，打开「📖」面板激活或添加</div>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron');
+      const list = document.getElementById('addr-list');
+      const empty = document.getElementById('addr-empty');
+      function render(arr) {
+        list.innerHTML = '';
+        // 仅显示 active 的地址，排序：激活优先 + 按实时延迟（ms）升序，与地址本面板保持一致
+        const active = (arr || []).filter((x) => x && x.active !== false);
+        active.sort((a, b) => {
+          const aa = a.active !== false, ab = b.active !== false;
+          if (aa !== ab) return aa ? -1 : 1;
+          const ma = (a.ms != null) ? a.ms : Infinity;
+          const mb = (b.ms != null) ? b.ms : Infinity;
+          return ma - mb;
+        });
+        if (!active.length) { empty.style.display = 'block'; return; }
+        empty.style.display = 'none';
+        active.forEach((x) => {
+          const u = x.url;
+          const d = document.createElement('div');
+          d.className = 'menu-item';
+          d.textContent = u;
+          d.title = u;
+          d.onclick = () => ipcRenderer.send('addr-dropdown-select', u);
+          list.appendChild(d);
+        });
+      }
+      ipcRenderer.on('addr-list', (_e, arr) => render(arr));
+    // 点击菜单外空白关闭
+    document.body.addEventListener('click', (e) => { if (e.target === document.body) ipcRenderer.send('addr-dropdown-close'); });
+    // ESC 关闭
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ipcRenderer.send('addr-dropdown-close'); });
+  </script>
+</body>
+</html>

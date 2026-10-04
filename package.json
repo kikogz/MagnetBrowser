@@ -1,0 +1,44 @@
+{
+  "name": "magnet-browser",
+  "version": "1.0.0",
+  "description": "Electron 内嵌浏览器 + 磁力链接识别 + 在线预览",
+  "main": "src/main.js",
+  "author": "kiko",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.kiko.magnetbrowser",
+    "productName": "MagnetBrowser",
+    "copyright": "Copyright © 2026 kiko",
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/torrent-stream/**",
+      "**/node_modules/parse-torrent/**",
+      "**/node_modules/bittorrent-dht/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "${productName}-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "parse-torrent": "^9.1.5",
+    "torrent-stream": "^1.2.0"
+  }
+}

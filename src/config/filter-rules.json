@@ -1,0 +1,15 @@
+{
+  "rules": [
+    "#top-ad",
+    ".ad-banner",
+    "[data-ad]",
+    ".google-ad",
+    ".adsbygoogle",
+    ".ad-box",
+    "[class*=\"ptb10\"]",
+    ".sidebar",
+    "#recommend-column",
+    "header .promo",
+    "[class^=\"banner\"]"
+  ]
+}

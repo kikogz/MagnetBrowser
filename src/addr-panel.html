@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>地址本</title>
+  <style>
+    html, body { margin: 0; background: transparent; font-family: var(--font); }
+
+    /* ============ Fluent 2 设计令牌（与设置弹窗 / NPMpanel2 对齐） ============ */
+    :root {
+      --bg-layer: #F3F3F3;
+      --bg-card: #FFFFFF;
+      --bg-card-secondary: #FAFAFA;
+      --bg-fill-subtle: rgba(0, 0, 0, 0.037);
+      --bg-fill-hover: rgba(0, 0, 0, 0.0537);
+      --bg-fill-pressed: rgba(0, 0, 0, 0.0241);
+      --stroke-card: #E5E5E5;
+      --stroke-control: rgba(0, 0, 0, 0.0578);
+      --stroke-control-strong: rgba(0, 0, 0, 0.4453);
+      --stroke-divider: rgba(0, 0, 0, 0.0805);
+      --text-primary: #1B1B1F;
+      --text-secondary: #616161;
+      --text-tertiary: #9E9E9E;
+      --text-on-accent: #FFFFFF;
+      --accent: #0078D4;
+      --accent-hover: #1A86D9;
+      --accent-pressed: #0067BE;
+      --accent-subtle: rgba(0, 120, 212, 0.1);
+      --radius-control: 4px;
+      --radius-card: 8px;
+      --font: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI",
+              -apple-system, "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+
+    .panel-card {
+      position: absolute;
+      inset: 8px;                 /* 四周留透明边，露出阴影形成浮层质感 */
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-layer);
+      border: 1px solid var(--stroke-card);
+      border-radius: var(--radius-card);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .18);
+      overflow: hidden;
+    }
+    .ap-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px 12px;
+    }
+    .ap-title { font-size: 20px; font-weight: 600; letter-spacing: -0.2px; color: var(--text-primary); }
+    .ap-x {
+      height: 32px; min-width: 32px; border: none; background: transparent;
+      border-radius: var(--radius-control); cursor: pointer; font-size: 16px; color: var(--text-secondary);
+    }
+    .ap-x:hover { background: var(--bg-fill-hover); color: var(--text-primary); }
+    .ap-x:active { background: var(--bg-fill-pressed); color: var(--text-tertiary); }
+
+    /* 主操作区：测试速度（Fluent 主按钮，整行宽） */
+    .ap-tools { padding: 0 18px 12px; }
+    #ap-test {
+      width: 100%;
+      height: 32px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-control);
+      background: var(--accent);
+      color: var(--text-on-accent);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #ap-test:hover { background: var(--accent-hover); }
+    #ap-test:active { background: var(--accent-pressed); color: rgba(255, 255, 255, .7); }
+    #ap-test:disabled { opacity: .6; cursor: default; }
+
+    /* 添加行 */
+    .ap-input-row { display: flex; gap: 8px; padding: 0 18px 12px; }
+    #ap-input {
+      flex: 1; height: 32px; padding: 0 10px;
+      border: 1px solid var(--stroke-control);
+      border-radius: var(--radius-control);
+      background: var(--bg-card); color: var(--text-primary);
+      font-family: var(--font); font-size: 13px; outline: none;
+    }
+    #ap-input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    #ap-add {
+      height: 32px; padding: 0 14px;
+      border: 1px solid var(--stroke-control); border-radius: var(--radius-control);
+      background: var(--bg-card); color: var(--text-primary);
+      font-family: var(--font); font-size: 13px; cursor: pointer;
+    }
+    #ap-add:hover { background: var(--bg-fill-hover); }
+    #ap-add:active { background: var(--bg-fill-pressed); color: var(--text-tertiary); }
+
+    /* 列表：每行一张卡片 */
+    .ap-list { flex: 1; overflow-y: auto; padding: 0 18px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .ap-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--stroke-card);
+      border-radius: var(--radius-card);
+    }
+    .ap-item-off { opacity: .5; }
+    .ap-url {
+      flex: 1; font-size: 13px; color: var(--text-primary); overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    }
+    .ap-url:hover { color: var(--accent); }
+    .ap-ms { font-size: 12px; color: #107c10; min-width: 56px; text-align: right; }
+
+    /* 图标式操作按键 */
+    .ap-act, .ap-del {
+      height: 32px; min-width: 32px; border: 1px solid var(--stroke-control);
+      background: var(--bg-card); border-radius: var(--radius-control);
+      cursor: pointer; font-size: 14px; line-height: 1; padding: 0 6px; color: var(--text-secondary);
+    }
+    .ap-act:hover { background: var(--bg-fill-hover); color: var(--accent); }
+    .ap-del:hover { background: #fde7e9; color: #c42b1c; border-color: #f3c0c5; }
+    .ap-empty { padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="panel-card">
+    <div class="ap-head">
+      <span class="ap-title">地址本</span>
+      <button id="ap-close" class="ap-x" title="关闭">✕</button>
+    </div>
+    <div class="ap-tools">
+      <button id="ap-test" class="btn primary">测试速度</button>
+    </div>
+    <div class="ap-input-row">
+      <input id="ap-input" type="text" placeholder="添加网址，回车确认" spellcheck="false" />
+      <button id="ap-add" class="btn">添加</button>
+    </div>
+    <div id="ap-list" class="ap-list"></div>
+  </div>
+  <script>
+    const api = window.electronAPI;
+    const apClose = document.getElementById('ap-close');
+    const apTest = document.getElementById('ap-test');
+    const apInput = document.getElementById('ap-input');
+    const apAdd = document.getElementById('ap-add');
+    const apList = document.getElementById('ap-list');
+
+    let addressBook = [];
+    let speedMap = {};
+
+    // 排序：始终「激活优先」，再按测速延迟升序（快在前）；每条含 删除 / 有效激活 图标按钮
+    function render() {
+      const sorted = addressBook.slice().sort((a, b) => {
+        const aa = a.active !== false, ab = b.active !== false;
+        if (aa !== ab) return aa ? -1 : 1;          // 激活项永远排在前
+        const ma = speedMap[a.url] != null ? speedMap[a.url] : Infinity;
+        const mb = speedMap[b.url] != null ? speedMap[b.url] : Infinity;
+        return ma - mb;                               // 激活组内按速度升序
+      });
+      apList.innerHTML = '';
+      if (!sorted.length) {
+        const e = document.createElement('div');
+        e.className = 'ap-empty';
+        e.textContent = '地址本为空，在上方输入框添加网址';
+        apList.appendChild(e);
+        return;
+      }
+      sorted.forEach((item) => {
+        const url = item.url;
+        const active = item.active !== false;
+        const row = document.createElement('div'); row.className = 'ap-item' + (active ? '' : ' ap-item-off');
+        const u = document.createElement('span'); u.className = 'ap-url'; u.textContent = url; u.title = url;
+        u.onclick = () => { api.navigate(url); window.close(); };   // 跳转后关闭浮窗
+        const ms = document.createElement('span'); ms.className = 'ap-ms';
+        ms.textContent = (speedMap[url] != null) ? (speedMap[url] + ' ms') : '--';
+        const act = document.createElement('button'); act.className = 'ap-act';
+        act.title = active ? '点击停用（停用后不出现在地址栏下拉）' : '点击激活';
+        act.textContent = active ? '✅' : '⚪';
+        act.onclick = (e) => { e.stopPropagation(); api.setAddressActive(url, !active).then(() => {}).catch(() => {}); };
+        const del = document.createElement('button'); del.className = 'ap-del'; del.title = '删除';
+        del.textContent = '🗑';
+        del.onclick = (e) => { e.stopPropagation(); api.deleteAddress(url).then(() => {}).catch(() => {}); };
+        row.appendChild(u); row.appendChild(ms); row.appendChild(act); row.appendChild(del);
+        apList.appendChild(row);
+      });
+    }
+
+    if (apClose) apClose.onclick = () => window.close();
+
+    if (apTest) apTest.onclick = () => {
+      if (!addressBook.length) return;
+      apTest.disabled = true; const t = apTest.textContent; apTest.textContent = '测速中…';
+      api.speedTest(addressBook.map((a) => a.url))
+        .then((results) => {
+          speedMap = {};
+          (results || []).forEach((r) => { if (r && r.url) speedMap[r.url] = r.ms; });
+          render();
+          // 速度最快的地址替换“默认打开网页地址”（启动页）
+          const fastest = (results || []).filter((r) => r && r.ms != null).sort((a, b) => a.ms - b.ms)[0];
+          if (fastest) {
+            api.getSettings().then((s) => {
+              const cur = Object.assign({}, s || {});
+              cur.startupUrl = fastest.url;
+              api.sendSettings(cur);
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {})
+        .finally(() => { apTest.disabled = false; apTest.textContent = t; });
+    };
+
+    function addFromPanel() {
+      const v = (apInput && apInput.value || '').trim();
+      if (!v) return;
+      api.addAddress(v).then(() => { if (apInput) apInput.value = ''; }).catch(() => {});
+    }
+    if (apAdd) apAdd.onclick = addFromPanel;
+    if (apInput) apInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFromPanel(); });
+
+    // 面板打开时回填上一次测速结果，使速度数字持续显示（直到重新测速或关闭程序）
+    api.getSpeeds().then((m) => { if (m && typeof m === 'object') { speedMap = m; render(); } }).catch(() => {});
+    // 测速过程中每个地址返回即实时重排（一边测速一边排序）
+    api.onSpeedProgress((r) => { if (r && r.url) { speedMap[r.url] = r.ms; render(); } });
+    // 地址本有变动（新增/删除/激活切换）时刷新；启动时拉取一次
+    api.onAddressBookUpdated((list) => { addressBook = Array.isArray(list) ? list : []; render(); });
+    api.getAddressBook().then((list) => { if (Array.isArray(list)) { addressBook = list; render(); } }).catch(() => {});
+  </script>
+</body>
+</html>
